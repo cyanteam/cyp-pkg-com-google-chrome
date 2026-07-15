@@ -1,0 +1,8 @@
+# Chrome 浏览器无额外 cyp 包依赖
+# 仅依赖系统运行时
+
+[[dependency]]
+name = "chrome"
+type = "runtime"
+check_command = "which google-chrome-stable || which chrome || ls '/Applications/Google Chrome.app' || where chrome"
+auto_install_command = ""

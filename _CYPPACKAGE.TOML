@@ -1,0 +1,13 @@
+name = "chrome"
+name_cn = "Chrome 浏览器"
+version = "0.0.0"  # 由 GitHub Action 自动更新
+package_id = "com.google.chrome"
+language = "native"
+architecture = "multi"
+author = "Google"
+
+[config_command]
+macosarm64 = "open '{install_path}/Google Chrome.app'"
+macosintel = "open '{install_path}/Google Chrome.app'"
+linux64 = "{install_path}/google-chrome-stable"
+win64 = "{install_path}\\chrome.exe"
