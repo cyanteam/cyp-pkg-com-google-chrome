@@ -2,12 +2,11 @@ name: Update Chrome
 
 on:
   schedule:
-    # 每天 UTC 6:00（北京时间 14:00）检查更新
     - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:
       force_version:
-        description: '强制指定版本号（留空则自动检测最新稳定版）'
+        description: 'force version (leave empty for latest stable)'
         required: false
         default: ''
 
@@ -34,9 +33,8 @@ jobs:
           if [ -n "${{ github.event.inputs.force_version }}" ]; then
             VERSION="${{ github.event.inputs.force_version }}"
           else
-            # 从 Google 版本历史 API 获取最新稳定版
-            VERSION=$(curl -s "https://versionhistory.googleapis.com/v1/chrome/platforms/linux/channels/stable/versions" \
-              | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['versions'][0]['version'])" 2>/dev/null || echo "")
+            VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json" \
+              | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['channels']['Stable']['version'])" 2>/dev/null || echo "")
             if [ -z "$VERSION" ]; then
               echo "Failed to get latest version"
               exit 1
@@ -55,39 +53,55 @@ jobs:
             exit 1
           fi
 
-      - name: Download Chrome - Linux
-        if: steps.check.outcome == 'success'
-        run: |
-          mkdir -p build/linux64/_CYPASSETS
-          cd build/linux64
-          curl -L -o _CYPASSETS/google-chrome-stable_current_amd64.deb \
-            "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
-          # 从 deb 中提取 chrome 二进制
-          ar x _CYPASSETS/google-chrome-stable_current_amd64.deb
-          tar xf data.tar.xz || tar xf data.tar.gz
-          cp opt/google/chrome/google-chrome-stable _CYPASSETS/google-chrome-stable 2>/dev/null || true
-          rm -f _CYPASSETS/google-chrome-stable_current_amd64.deb control.tar.* data.tar.* debian.binary
-
-      - name: Download Chrome - Windows
-        if: steps.check.outcome == 'success'
-        run: |
-          mkdir -p build/win64/_CYPASSETS
-          cd build/win64
-          curl -L -o _CYPASSETS/chrome_installer.exe \
-            "https://dl.google.com/chrome/dl/channel/stable/win64/googlechromestandaloneenterprise64.msi"
-
-      - name: Download Chrome - macOS
-        if: steps.check.outcome == 'success'
-        run: |
-          mkdir -p build/macos/_CYPASSETS
-          cd build/macos
-          curl -L -o _CYPASSETS/googlechrome.dmg \
-            "https://dl.google.com/chrome/mac/stable/GGRO/googlechrome.dmg"
-
-      - name: Create package configs
+      - name: Download Chrome for Testing - Linux64
         if: steps.check.outcome == 'success'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p build/linux64/_CYPASSETS
+          cd build/linux64
+          curl -L -o chrome-linux64.zip "https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/linux64/chrome-linux64.zip"
+          unzip -q chrome-linux64.zip
+          cp chrome-linux64/chrome _CYPASSETS/chrome 2>/dev/null || true
+          rm -rf chrome-linux64 chrome-linux64.zip
+
+      - name: Download Chrome for Testing - Win64
+        if: steps.check.outcome == 'success'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p build/win64/_CYPASSETS
+          cd build/win64
+          curl -L -o chrome-win64.zip "https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/win64/chrome-win64.zip"
+          unzip -q chrome-win64.zip
+          cp -r chrome-win64/* _CYPASSETS/ 2>/dev/null || true
+          rm -rf chrome-win64 chrome-win64.zip
+
+      - name: Download Chrome for Testing - macOS ARM64
+        if: steps.check.outcome == 'success'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p build/macos-arm64/_CYPASSETS
+          cd build/macos-arm64
+          curl -L -o chrome-mac-arm64.zip "https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/mac-arm64/chrome-mac-arm64.zip"
+          unzip -q chrome-mac-arm64.zip
+          cp -r "Google Chrome for Testing.app" _CYPASSETS/ 2>/dev/null || true
+          rm -rf chrome-mac-arm64.zip
+
+      - name: Download Chrome for Testing - macOS x64
+        if: steps.check.outcome == 'success'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p build/macos-x64/_CYPASSETS
+          cd build/macos-x64
+          curl -L -o chrome-mac-x64.zip "https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/mac-x64/chrome-mac-x64.zip"
+          unzip -q chrome-mac-x64.zip
+          cp -r "Google Chrome for Testing.app" _CYPASSETS/ 2>/dev/null || true
+          rm -rf chrome-mac-x64.zip
+
+      - name: Create package configs and pack
+        if: steps.check.outcome == 'success'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p dist
 
           # Linux64
           cat > build/linux64/_CYPPACKAGE.TOML << EOF
@@ -100,15 +114,15 @@ jobs:
           author = "Google"
 
           [config_command]
-          linux64 = "./_CYPASSETS/google-chrome-stable"
+          linux64 = "./_CYPASSETS/chrome"
           EOF
-
           cat > build/linux64/_CYPREQUIRE.TOML << 'EOF'
           [[dependency]]
           name = "chrome"
           type = "runtime"
-          check_command = "which google-chrome-stable || which google-chrome"
+          check_command = "which google-chrome || which chrome"
           EOF
+          cd build/linux64 && cyp pack . -o ../../dist/chrome-${VERSION}-linux64.cyp; cd ../..
 
           # Win64
           cat > build/win64/_CYPPACKAGE.TOML << EOF
@@ -121,18 +135,18 @@ jobs:
           author = "Google"
 
           [config_command]
-          win64 = "./_CYPASSETS/chrome_installer.exe"
+          win64 = "./_CYPASSETS/chrome.exe"
           EOF
-
           cat > build/win64/_CYPREQUIRE.TOML << 'EOF'
           [[dependency]]
           name = "chrome"
           type = "runtime"
           check_command = "where chrome"
           EOF
+          cd build/win64 && cyp pack . -o ../../dist/chrome-${VERSION}-win64.cyp; cd ../..
 
-          # macOS (universal - 包含 arm64 和 x86_64)
-          cat > build/macos/_CYPPACKAGE.TOML << EOF
+          # macOS ARM64
+          cat > build/macos-arm64/_CYPPACKAGE.TOML << EOF
           name = "chrome"
           name_cn = "Chrome 浏览器"
           version = "${VERSION}"
@@ -142,39 +156,37 @@ jobs:
           author = "Google"
 
           [config_command]
-          macosarm64 = "open './_CYPASSETS/Google Chrome.app'"
-          macosintel = "open './_CYPASSETS/Google Chrome.app'"
+          macosarm64 = "open './_CYPASSETS/Google Chrome for Testing.app'"
           EOF
-
-          cat > build/macos/_CYPREQUIRE.TOML << 'EOF'
+          cat > build/macos-arm64/_CYPREQUIRE.TOML << 'EOF'
           [[dependency]]
           name = "chrome"
           type = "runtime"
           check_command = "ls '/Applications/Google Chrome.app'"
           EOF
+          cd build/macos-arm64 && cyp pack . -o ../../dist/chrome-${VERSION}-macosarm64.cyp; cd ../..
 
-      - name: Pack cyp packages
-        if: steps.check.outcome == 'success'
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          mkdir -p dist
+          # macOS x64
+          cat > build/macos-x64/_CYPPACKAGE.TOML << EOF
+          name = "chrome"
+          name_cn = "Chrome 浏览器"
+          version = "${VERSION}"
+          package_id = "com.google.chrome"
+          language = "native"
+          architecture = "macosintel"
+          author = "Google"
 
-          # Linux64
-          cd build/linux64
-          cyp pack . -o ../../dist/chrome-${VERSION}-linux64.cyp || echo "cyp pack linux64 failed, creating zip fallback"
-          cd ../..
+          [config_command]
+          macosintel = "open './_CYPASSETS/Google Chrome for Testing.app'"
+          EOF
+          cat > build/macos-x64/_CYPREQUIRE.TOML << 'EOF'
+          [[dependency]]
+          name = "chrome"
+          type = "runtime"
+          check_command = "ls '/Applications/Google Chrome.app'"
+          EOF
+          cd build/macos-x64 && cyp pack . -o ../../dist/chrome-${VERSION}-macosintel.cyp; cd ../..
 
-          # Win64
-          cd build/win64
-          cyp pack . -o ../../dist/chrome-${VERSION}-win64.cyp || echo "cyp pack win64 failed, creating zip fallback"
-          cd ../..
-
-          # macOS
-          cd build/macos
-          cyp pack . -o ../../dist/chrome-${VERSION}-macosarm64.cyp || echo "cyp pack macos failed, creating zip fallback"
-          cd ../..
-
-          # 列出构建产物
           ls -lh dist/ || true
 
       - name: Create version branch and tag
@@ -183,17 +195,11 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # 更新 _CYPPACKAGE.TOML 中的版本号
           sed -i "s/version = \"0.0.0\"/version = \"${VERSION}\"/" _CYPPACKAGE.TOML
           git add _CYPPACKAGE.TOML
           git commit -m "Update Chrome to ${VERSION}" || true
-
-          # 创建版本分支
-          git checkout -b "v${VERSION}" || git checkout "v${VERSION}"
+          git checkout -b "v${VERSION}" 2>/dev/null || git checkout "v${VERSION}"
           git push origin "v${VERSION}" || true
-
-          # 创建 tag
           git tag "v${VERSION}"
           git push origin "v${VERSION}" --tags || true
 
@@ -206,15 +212,12 @@ jobs:
           body: |
             Google Chrome stable version ${{ steps.version.outputs.version }}
 
-            ## 安装
-            ```
-            cyp install chrome
-            ```
+            Install: `cyp install chrome`
 
-            ## 平台文件
-            | 文件 | 平台 |
-            |------|------|
+            | File | Platform |
+            |------|----------|
             | `chrome-${{ steps.version.outputs.version }}-macosarm64.cyp` | macOS ARM64 |
+            | `chrome-${{ steps.version.outputs.version }}-macosintel.cyp` | macOS x64 |
             | `chrome-${{ steps.version.outputs.version }}-linux64.cyp` | Linux x64 |
             | `chrome-${{ steps.version.outputs.version }}-win64.cyp` | Windows x64 |
           files: |
