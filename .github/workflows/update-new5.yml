@@ -9,6 +9,11 @@ on:
         description: 'force version (leave empty for latest stable)'
         required: false
         default: ''
+      force_rebuild:
+        description: 'Force rebuild even if version exists'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -53,13 +58,22 @@ jobs:
         continue-on-error: true
         run: |
           git fetch --tags
+          FORCE_REBUILD="${{ github.event.inputs.force_rebuild }}"
+          if [ "$FORCE_REBUILD" == "true" ]; then
+            echo "Force rebuild enabled, skipping version check"
+            echo "should_skip=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
           if git tag | grep -q "^v${{ steps.version.outputs.semver_version }}$"; then
             echo "Version ${{ steps.version.outputs.semver_version }} already exists, skipping"
+            echo "should_skip=true" >> $GITHUB_OUTPUT
             exit 1
+          else
+            echo "should_skip=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Download Chrome for Testing - Linux64
-        if: steps.check.outcome == 'success'
+        if: steps.check.outputs.should_skip != 'true'
         run: |
           FULL_VERSION="${{ steps.version.outputs.full_version }}"
           mkdir -p build/linux64/_CYPASSETS
@@ -71,7 +85,7 @@ jobs:
           rm -rf chrome-linux64 chrome-linux64.zip
 
       - name: Download Chrome for Testing - Win64
-        if: steps.check.outcome == 'success'
+        if: steps.check.outputs.should_skip != 'true'
         run: |
           FULL_VERSION="${{ steps.version.outputs.full_version }}"
           mkdir -p build/win64/_CYPASSETS
@@ -82,7 +96,7 @@ jobs:
           rm -rf chrome-win64 chrome-win64.zip
 
       - name: Download Chrome for Testing - macOS ARM64
-        if: steps.check.outcome == 'success'
+        if: steps.check.outputs.should_skip != 'true'
         run: |
           FULL_VERSION="${{ steps.version.outputs.full_version }}"
           mkdir -p build/macos-arm64/_CYPASSETS
@@ -93,7 +107,7 @@ jobs:
           rm -rf chrome-mac-arm64.zip
 
       - name: Download Chrome for Testing - macOS x64
-        if: steps.check.outcome == 'success'
+        if: steps.check.outputs.should_skip != 'true'
         run: |
           FULL_VERSION="${{ steps.version.outputs.full_version }}"
           mkdir -p build/macos-x64/_CYPASSETS
@@ -104,7 +118,7 @@ jobs:
           rm -rf chrome-mac-x64.zip
 
       - name: Create package configs and pack
-        if: steps.check.outcome == 'success'
+        if: steps.check.outputs.should_skip != 'true'
         run: |
           FULL_VERSION="${{ steps.version.outputs.full_version }}"
           SEMVER_VERSION="${{ steps.version.outputs.semver_version }}"
@@ -196,8 +210,21 @@ jobs:
 
           ls -lh dist/ || true
 
+      - name: Delete existing release if force rebuild
+        if: steps.check.outputs.should_skip != 'true' && github.event.inputs.force_rebuild == 'true'
+        run: |
+          SEMVER_VERSION="${{ steps.version.outputs.semver_version }}"
+          TAG="v${SEMVER_VERSION}"
+          # Delete existing tag
+          git tag -d "${TAG}" 2>/dev/null || true
+          git push origin ":refs/tags/${TAG}" 2>/dev/null || true
+          # Delete existing release
+          gh release delete "${TAG}" -y 2>/dev/null || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create version branch and tag
-        if: steps.check.outcome == 'success'
+        if: steps.check.outputs.should_skip != 'true'
         run: |
           SEMVER_VERSION="${{ steps.version.outputs.semver_version }}"
           git config user.name "github-actions[bot]"
@@ -206,12 +233,12 @@ jobs:
           git add _CYPPACKAGE.TOML
           git commit -m "Update Chrome to ${SEMVER_VERSION}" || true
           git checkout -b "v${SEMVER_VERSION}" 2>/dev/null || git checkout "v${SEMVER_VERSION}"
-          git push origin "v${SEMVER_VERSION}" || true
+          git push origin "v${SEMVER_VERSION}" --force || true
           git tag "v${SEMVER_VERSION}"
-          git push origin "v${SEMVER_VERSION}" --tags || true
+          git push origin "v${SEMVER_VERSION}" --tags --force || true
 
       - name: Create GitHub Release
-        if: steps.check.outcome == 'success'
+        if: steps.check.outputs.should_skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.semver_version }}
@@ -229,7 +256,8 @@ jobs:
             | `chrome-${{ steps.version.outputs.semver_version }}-win64.cyp` | Windows x64 |
           files: |
             dist/*.cyp
-          generate_release_notes: false
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
