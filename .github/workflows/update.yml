@@ -124,7 +124,7 @@ jobs:
           SEMVER_VERSION="${{ steps.version.outputs.semver_version }}"
           mkdir -p dist
 
-          # Linux64 - 注意：-o 指定目录，不要带 .cyp 后缀
+          # Linux64
           cat > build/linux64/_CYPPACKAGE.TOML << EOF
           name = "chrome"
           name_cn = "Chrome 浏览器"
@@ -143,7 +143,7 @@ jobs:
           type = "runtime"
           check_command = "which google-chrome || which chrome"
           EOF
-          cd build/linux64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${SEMVER_VERSION}-linux64.cyp; cd ../..
+          cd build/linux64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/; cd ../..
 
           # Win64
           cat > build/win64/_CYPPACKAGE.TOML << EOF
@@ -164,7 +164,7 @@ jobs:
           type = "runtime"
           check_command = "where chrome"
           EOF
-          cd build/win64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${SEMVER_VERSION}-win64.cyp; cd ../..
+          cd build/win64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/; cd ../..
 
           # macOS ARM64
           cat > build/macos-arm64/_CYPPACKAGE.TOML << EOF
@@ -185,7 +185,7 @@ jobs:
           type = "runtime"
           check_command = "ls '/Applications/Google Chrome.app'"
           EOF
-          cd build/macos-arm64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${SEMVER_VERSION}-macosarm64.cyp; cd ../..
+          cd build/macos-arm64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/; cd ../..
 
           # macOS x64
           cat > build/macos-x64/_CYPPACKAGE.TOML << EOF
@@ -206,12 +206,24 @@ jobs:
           type = "runtime"
           check_command = "ls '/Applications/Google Chrome.app'"
           EOF
-          cd build/macos-x64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${SEMVER_VERSION}-macosintel.cyp; cd ../..
+          cd build/macos-x64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/; cd ../..
 
-          # 移动实际的文件到 dist 根目录
-          echo "Moving .cyp files to dist root..."
-          mv dist/*.cyp/*.cyp dist/ 2>/dev/null || true
-          rm -rf dist/*.cyp/ 2>/dev/null || true
+          # cyp 自动命名规则：当 -o 指定目录时，会自动生成 package_id-version.cyp
+          # 但所有平台都会生成 com.google.chrome-151.0.7922.cyp，会互相覆盖
+          # 所以需要重命名
+          echo "Renaming packages..."
+          cd dist
+          for dir in chrome-*-linux64.cyp chrome-*-win64.cyp chrome-*-macosarm64.cyp chrome-*-macosintel.cyp; do
+            if [ -d "$dir" ]; then
+              # 查找里面的 .cyp 文件
+              cyp_file=$(find "$dir" -name "*.cyp" -type f 2>/dev/null | head -1)
+              if [ -n "$cyp_file" ]; then
+                mv "$cyp_file" "${dir}" 2>/dev/null || true
+              fi
+              rm -rf "$dir" 2>/dev/null || true
+            fi
+          done
+          cd ..
           
           echo "All packages created. Listing dist directory:"
           ls -lh dist/ || true
