@@ -25,7 +25,9 @@ jobs:
           node-version: '20'
 
       - name: Install cyp
-        run: curl -fsSL https://cyp.cyteam.cc.cd/install.sh | bash && export PATH=\"\$HOME/.cyp/bin:\$PATH\"
+        run: |
+          curl -fsSL https://cyp.cyteam.cc.cd/install.sh | bash
+          echo "$HOME/.cyp/bin" >> $GITHUB_PATH
 
       - name: Get latest Chrome version
         id: version
@@ -122,7 +124,7 @@ jobs:
           type = "runtime"
           check_command = "which google-chrome || which chrome"
           EOF
-          cd build/linux64 && cyp pack . -o ../../dist/chrome-${VERSION}-linux64.cyp; cd ../..
+          cd build/linux64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${VERSION}-linux64.cyp; cd ../..
 
           # Win64
           cat > build/win64/_CYPPACKAGE.TOML << EOF
@@ -143,7 +145,7 @@ jobs:
           type = "runtime"
           check_command = "where chrome"
           EOF
-          cd build/win64 && cyp pack . -o ../../dist/chrome-${VERSION}-win64.cyp; cd ../..
+          cd build/win64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${VERSION}-win64.cyp; cd ../..
 
           # macOS ARM64
           cat > build/macos-arm64/_CYPPACKAGE.TOML << EOF
@@ -164,7 +166,7 @@ jobs:
           type = "runtime"
           check_command = "ls '/Applications/Google Chrome.app'"
           EOF
-          cd build/macos-arm64 && cyp pack . -o ../../dist/chrome-${VERSION}-macosarm64.cyp; cd ../..
+          cd build/macos-arm64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${VERSION}-macosarm64.cyp; cd ../..
 
           # macOS x64
           cat > build/macos-x64/_CYPPACKAGE.TOML << EOF
@@ -185,7 +187,7 @@ jobs:
           type = "runtime"
           check_command = "ls '/Applications/Google Chrome.app'"
           EOF
-          cd build/macos-x64 && cyp pack . -o ../../dist/chrome-${VERSION}-macosintel.cyp; cd ../..
+          cd build/macos-x64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${VERSION}-macosintel.cyp; cd ../..
 
           ls -lh dist/ || true
 
