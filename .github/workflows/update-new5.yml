@@ -42,7 +42,6 @@ jobs:
               exit 1
             fi
           fi
-          # 转换为语义化版本：去掉最后一段
           SEMVER_VERSION=$(echo "$FULL_VERSION" | cut -d. -f1-3)
           echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
           echo "semver_version=$SEMVER_VERSION" >> $GITHUB_OUTPUT
@@ -230,6 +229,7 @@ jobs:
             | `chrome-${{ steps.version.outputs.semver_version }}-win64.cyp` | Windows x64 |
           files: |
             dist/*.cyp
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
