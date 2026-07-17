@@ -25,7 +25,7 @@ jobs:
           node-version: '20'
 
       - name: Install cyp
-        run: npm install -g cyp
+        run: curl -fsSL https://cyp.cyteam.cc.cd/install.sh | bash && export PATH=\"\$HOME/.cyp/bin:\$PATH\"
 
       - name: Get latest Chrome version
         id: version
