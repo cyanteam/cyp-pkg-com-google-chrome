@@ -78,13 +78,11 @@ jobs:
           FULL_VERSION="${{ steps.version.outputs.full_version }}"
           mkdir -p build/linux64/_CYPASSETS
           cd build/linux64
-          echo "Downloading Chrome Linux64 version: ${FULL_VERSION}"
           curl -L -o chrome-linux64.zip "https://storage.googleapis.com/chrome-for-testing-public/${FULL_VERSION}/linux64/chrome-linux64.zip"
           unzip -q chrome-linux64.zip
           cp chrome-linux64/chrome _CYPASSETS/chrome 2>/dev/null || true
           chmod +x _CYPASSETS/chrome
           rm -rf chrome-linux64 chrome-linux64.zip
-          ls -la _CYPASSETS/
 
       - name: Download Chrome for Testing - Win64
         if: steps.check.outputs.should_skip != 'true'
@@ -92,12 +90,10 @@ jobs:
           FULL_VERSION="${{ steps.version.outputs.full_version }}"
           mkdir -p build/win64/_CYPASSETS
           cd build/win64
-          echo "Downloading Chrome Win64 version: ${FULL_VERSION}"
           curl -L -o chrome-win64.zip "https://storage.googleapis.com/chrome-for-testing-public/${FULL_VERSION}/win64/chrome-win64.zip"
           unzip -q chrome-win64.zip
           cp -r chrome-win64/* _CYPASSETS/ 2>/dev/null || true
           rm -rf chrome-win64 chrome-win64.zip
-          ls -la _CYPASSETS/
 
       - name: Download Chrome for Testing - macOS ARM64
         if: steps.check.outputs.should_skip != 'true'
@@ -105,12 +101,10 @@ jobs:
           FULL_VERSION="${{ steps.version.outputs.full_version }}"
           mkdir -p build/macos-arm64/_CYPASSETS
           cd build/macos-arm64
-          echo "Downloading Chrome macOS ARM64 version: ${FULL_VERSION}"
           curl -L -o chrome-mac-arm64.zip "https://storage.googleapis.com/chrome-for-testing-public/${FULL_VERSION}/mac-arm64/chrome-mac-arm64.zip"
           unzip -q chrome-mac-arm64.zip
           cp -r "Google Chrome for Testing.app" _CYPASSETS/ 2>/dev/null || true
           rm -rf chrome-mac-arm64.zip
-          ls -la _CYPASSETS/
 
       - name: Download Chrome for Testing - macOS x64
         if: steps.check.outputs.should_skip != 'true'
@@ -118,12 +112,10 @@ jobs:
           FULL_VERSION="${{ steps.version.outputs.full_version }}"
           mkdir -p build/macos-x64/_CYPASSETS
           cd build/macos-x64
-          echo "Downloading Chrome macOS x64 version: ${FULL_VERSION}"
           curl -L -o chrome-mac-x64.zip "https://storage.googleapis.com/chrome-for-testing-public/${FULL_VERSION}/mac-x64/chrome-mac-x64.zip"
           unzip -q chrome-mac-x64.zip
           cp -r "Google Chrome for Testing.app" _CYPASSETS/ 2>/dev/null || true
           rm -rf chrome-mac-x64.zip
-          ls -la _CYPASSETS/
 
       - name: Create package configs and pack
         if: steps.check.outputs.should_skip != 'true'
@@ -132,10 +124,7 @@ jobs:
           SEMVER_VERSION="${{ steps.version.outputs.semver_version }}"
           mkdir -p dist
 
-          echo "Creating packages for version: ${SEMVER_VERSION}"
-
-          # Linux64
-          echo "Creating Linux64 package..."
+          # Linux64 - 注意：-o 指定目录，不要带 .cyp 后缀
           cat > build/linux64/_CYPPACKAGE.TOML << EOF
           name = "chrome"
           name_cn = "Chrome 浏览器"
@@ -155,15 +144,8 @@ jobs:
           check_command = "which google-chrome || which chrome"
           EOF
           cd build/linux64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${SEMVER_VERSION}-linux64.cyp; cd ../..
-          if [ -f "dist/chrome-${SEMVER_VERSION}-linux64.cyp" ]; then
-            echo "✓ Linux64 package created successfully"
-            ls -lh "dist/chrome-${SEMVER_VERSION}-linux64.cyp"
-          else
-            echo "✗ Linux64 package creation failed"
-          fi
 
           # Win64
-          echo "Creating Win64 package..."
           cat > build/win64/_CYPPACKAGE.TOML << EOF
           name = "chrome"
           name_cn = "Chrome 浏览器"
@@ -183,15 +165,8 @@ jobs:
           check_command = "where chrome"
           EOF
           cd build/win64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${SEMVER_VERSION}-win64.cyp; cd ../..
-          if [ -f "dist/chrome-${SEMVER_VERSION}-win64.cyp" ]; then
-            echo "✓ Win64 package created successfully"
-            ls -lh "dist/chrome-${SEMVER_VERSION}-win64.cyp"
-          else
-            echo "✗ Win64 package creation failed"
-          fi
 
           # macOS ARM64
-          echo "Creating macOS ARM64 package..."
           cat > build/macos-arm64/_CYPPACKAGE.TOML << EOF
           name = "chrome"
           name_cn = "Chrome 浏览器"
@@ -211,15 +186,8 @@ jobs:
           check_command = "ls '/Applications/Google Chrome.app'"
           EOF
           cd build/macos-arm64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${SEMVER_VERSION}-macosarm64.cyp; cd ../..
-          if [ -f "dist/chrome-${SEMVER_VERSION}-macosarm64.cyp" ]; then
-            echo "✓ macOS ARM64 package created successfully"
-            ls -lh "dist/chrome-${SEMVER_VERSION}-macosarm64.cyp"
-          else
-            echo "✗ macOS ARM64 package creation failed"
-          fi
 
           # macOS x64
-          echo "Creating macOS x64 package..."
           cat > build/macos-x64/_CYPPACKAGE.TOML << EOF
           name = "chrome"
           name_cn = "Chrome 浏览器"
@@ -239,37 +207,22 @@ jobs:
           check_command = "ls '/Applications/Google Chrome.app'"
           EOF
           cd build/macos-x64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${SEMVER_VERSION}-macosintel.cyp; cd ../..
-          if [ -f "dist/chrome-${SEMVER_VERSION}-macosintel.cyp" ]; then
-            echo "✓ macOS x64 package created successfully"
-            ls -lh "dist/chrome-${SEMVER_VERSION}-macosintel.cyp"
-          else
-            echo "✗ macOS x64 package creation failed"
-          fi
 
+          # 移动实际的文件到 dist 根目录
+          echo "Moving .cyp files to dist root..."
+          mv dist/*.cyp/*.cyp dist/ 2>/dev/null || true
+          rm -rf dist/*.cyp/ 2>/dev/null || true
+          
           echo "All packages created. Listing dist directory:"
           ls -lh dist/ || true
-
-      - name: Debug - List dist files
-        if: steps.check.outputs.should_skip != 'true'
-        run: |
-          echo "Current directory:"
-          pwd
-          echo "Contents of dist:"
-          ls -la dist/ || echo "dist directory does not exist"
-          echo "Contents of build:"
-          ls -la build/ || echo "build directory does not exist"
-          echo "File sizes:"
-          du -sh dist/*.cyp 2>/dev/null || echo "No .cyp files found in dist"
 
       - name: Delete existing release if force rebuild
         if: steps.check.outputs.should_skip != 'true' && github.event.inputs.force_rebuild == 'true'
         run: |
           SEMVER_VERSION="${{ steps.version.outputs.semver_version }}"
           TAG="v${SEMVER_VERSION}"
-          echo "Deleting existing tag and release for ${TAG}"
           git tag -d "${TAG}" 2>/dev/null || true
           git push origin ":refs/tags/${TAG}" 2>/dev/null || true
-          # Use gh CLI to delete release
           gh release delete "${TAG}" -y 2>/dev/null || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
