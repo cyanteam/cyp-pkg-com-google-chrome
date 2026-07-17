@@ -33,35 +33,39 @@ jobs:
         id: version
         run: |
           if [ -n "${{ github.event.inputs.force_version }}" ]; then
-            VERSION="${{ github.event.inputs.force_version }}"
+            FULL_VERSION="${{ github.event.inputs.force_version }}"
           else
-            VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json" \
+            FULL_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json" \
               | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['channels']['Stable']['version'])" 2>/dev/null || echo "")
-            if [ -z "$VERSION" ]; then
+            if [ -z "$FULL_VERSION" ]; then
               echo "Failed to get latest version"
               exit 1
             fi
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Latest Chrome version: $VERSION"
+          # 转换为语义化版本：去掉最后一段
+          SEMVER_VERSION=$(echo "$FULL_VERSION" | cut -d. -f1-3)
+          echo "full_version=$FULL_VERSION" >> $GITHUB_OUTPUT
+          echo "semver_version=$SEMVER_VERSION" >> $GITHUB_OUTPUT
+          echo "Full Chrome version: $FULL_VERSION"
+          echo "Semver version: $SEMVER_VERSION"
 
       - name: Check if version already exists
         id: check
         continue-on-error: true
         run: |
           git fetch --tags
-          if git tag | grep -q "^v${{ steps.version.outputs.version }}$"; then
-            echo "Version ${{ steps.version.outputs.version }} already exists, skipping"
+          if git tag | grep -q "^v${{ steps.version.outputs.semver_version }}$"; then
+            echo "Version ${{ steps.version.outputs.semver_version }} already exists, skipping"
             exit 1
           fi
 
       - name: Download Chrome for Testing - Linux64
         if: steps.check.outcome == 'success'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          FULL_VERSION="${{ steps.version.outputs.full_version }}"
           mkdir -p build/linux64/_CYPASSETS
           cd build/linux64
-          curl -L -o chrome-linux64.zip "https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/linux64/chrome-linux64.zip"
+          curl -L -o chrome-linux64.zip "https://storage.googleapis.com/chrome-for-testing-public/${FULL_VERSION}/linux64/chrome-linux64.zip"
           unzip -q chrome-linux64.zip
           cp chrome-linux64/chrome _CYPASSETS/chrome 2>/dev/null || true
           rm -rf chrome-linux64 chrome-linux64.zip
@@ -69,10 +73,10 @@ jobs:
       - name: Download Chrome for Testing - Win64
         if: steps.check.outcome == 'success'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          FULL_VERSION="${{ steps.version.outputs.full_version }}"
           mkdir -p build/win64/_CYPASSETS
           cd build/win64
-          curl -L -o chrome-win64.zip "https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/win64/chrome-win64.zip"
+          curl -L -o chrome-win64.zip "https://storage.googleapis.com/chrome-for-testing-public/${FULL_VERSION}/win64/chrome-win64.zip"
           unzip -q chrome-win64.zip
           cp -r chrome-win64/* _CYPASSETS/ 2>/dev/null || true
           rm -rf chrome-win64 chrome-win64.zip
@@ -80,10 +84,10 @@ jobs:
       - name: Download Chrome for Testing - macOS ARM64
         if: steps.check.outcome == 'success'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          FULL_VERSION="${{ steps.version.outputs.full_version }}"
           mkdir -p build/macos-arm64/_CYPASSETS
           cd build/macos-arm64
-          curl -L -o chrome-mac-arm64.zip "https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/mac-arm64/chrome-mac-arm64.zip"
+          curl -L -o chrome-mac-arm64.zip "https://storage.googleapis.com/chrome-for-testing-public/${FULL_VERSION}/mac-arm64/chrome-mac-arm64.zip"
           unzip -q chrome-mac-arm64.zip
           cp -r "Google Chrome for Testing.app" _CYPASSETS/ 2>/dev/null || true
           rm -rf chrome-mac-arm64.zip
@@ -91,10 +95,10 @@ jobs:
       - name: Download Chrome for Testing - macOS x64
         if: steps.check.outcome == 'success'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          FULL_VERSION="${{ steps.version.outputs.full_version }}"
           mkdir -p build/macos-x64/_CYPASSETS
           cd build/macos-x64
-          curl -L -o chrome-mac-x64.zip "https://storage.googleapis.com/chrome-for-testing-public/${VERSION}/mac-x64/chrome-mac-x64.zip"
+          curl -L -o chrome-mac-x64.zip "https://storage.googleapis.com/chrome-for-testing-public/${FULL_VERSION}/mac-x64/chrome-mac-x64.zip"
           unzip -q chrome-mac-x64.zip
           cp -r "Google Chrome for Testing.app" _CYPASSETS/ 2>/dev/null || true
           rm -rf chrome-mac-x64.zip
@@ -102,14 +106,15 @@ jobs:
       - name: Create package configs and pack
         if: steps.check.outcome == 'success'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          FULL_VERSION="${{ steps.version.outputs.full_version }}"
+          SEMVER_VERSION="${{ steps.version.outputs.semver_version }}"
           mkdir -p dist
 
           # Linux64
           cat > build/linux64/_CYPPACKAGE.TOML << EOF
           name = "chrome"
           name_cn = "Chrome 浏览器"
-          version = "${VERSION}"
+          version = "${SEMVER_VERSION}"
           package_id = "com.google.chrome"
           language = "native"
           architecture = "linux64"
@@ -124,13 +129,13 @@ jobs:
           type = "runtime"
           check_command = "which google-chrome || which chrome"
           EOF
-          cd build/linux64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${VERSION}-linux64.cyp; cd ../..
+          cd build/linux64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${SEMVER_VERSION}-linux64.cyp; cd ../..
 
           # Win64
           cat > build/win64/_CYPPACKAGE.TOML << EOF
           name = "chrome"
           name_cn = "Chrome 浏览器"
-          version = "${VERSION}"
+          version = "${SEMVER_VERSION}"
           package_id = "com.google.chrome"
           language = "native"
           architecture = "win64"
@@ -145,13 +150,13 @@ jobs:
           type = "runtime"
           check_command = "where chrome"
           EOF
-          cd build/win64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${VERSION}-win64.cyp; cd ../..
+          cd build/win64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${SEMVER_VERSION}-win64.cyp; cd ../..
 
           # macOS ARM64
           cat > build/macos-arm64/_CYPPACKAGE.TOML << EOF
           name = "chrome"
           name_cn = "Chrome 浏览器"
-          version = "${VERSION}"
+          version = "${SEMVER_VERSION}"
           package_id = "com.google.chrome"
           language = "native"
           architecture = "macosarm64"
@@ -166,13 +171,13 @@ jobs:
           type = "runtime"
           check_command = "ls '/Applications/Google Chrome.app'"
           EOF
-          cd build/macos-arm64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${VERSION}-macosarm64.cyp; cd ../..
+          cd build/macos-arm64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${SEMVER_VERSION}-macosarm64.cyp; cd ../..
 
           # macOS x64
           cat > build/macos-x64/_CYPPACKAGE.TOML << EOF
           name = "chrome"
           name_cn = "Chrome 浏览器"
-          version = "${VERSION}"
+          version = "${SEMVER_VERSION}"
           package_id = "com.google.chrome"
           language = "native"
           architecture = "macosintel"
@@ -187,41 +192,41 @@ jobs:
           type = "runtime"
           check_command = "ls '/Applications/Google Chrome.app'"
           EOF
-          cd build/macos-x64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${VERSION}-macosintel.cyp; cd ../..
+          cd build/macos-x64 && $HOME/.cyp/bin/cyp pack . -o ../../dist/chrome-${SEMVER_VERSION}-macosintel.cyp; cd ../..
 
           ls -lh dist/ || true
 
       - name: Create version branch and tag
         if: steps.check.outcome == 'success'
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          SEMVER_VERSION="${{ steps.version.outputs.semver_version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          sed -i "s/version = \"0.0.0\"/version = \"${VERSION}\"/" _CYPPACKAGE.TOML
+          sed -i "s/version = \"0.0.0\"/version = \"${SEMVER_VERSION}\"/" _CYPPACKAGE.TOML
           git add _CYPPACKAGE.TOML
-          git commit -m "Update Chrome to ${VERSION}" || true
-          git checkout -b "v${VERSION}" 2>/dev/null || git checkout "v${VERSION}"
-          git push origin "v${VERSION}" || true
-          git tag "v${VERSION}"
-          git push origin "v${VERSION}" --tags || true
+          git commit -m "Update Chrome to ${SEMVER_VERSION}" || true
+          git checkout -b "v${SEMVER_VERSION}" 2>/dev/null || git checkout "v${SEMVER_VERSION}"
+          git push origin "v${SEMVER_VERSION}" || true
+          git tag "v${SEMVER_VERSION}"
+          git push origin "v${SEMVER_VERSION}" --tags || true
 
       - name: Create GitHub Release
         if: steps.check.outcome == 'success'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: Chrome ${{ steps.version.outputs.version }}
+          tag_name: v${{ steps.version.outputs.semver_version }}
+          name: Chrome ${{ steps.version.outputs.full_version }}
           body: |
-            Google Chrome stable version ${{ steps.version.outputs.version }}
+            Google Chrome stable version ${{ steps.version.outputs.full_version }}
 
             Install: `cyp install chrome`
 
             | File | Platform |
             |------|----------|
-            | `chrome-${{ steps.version.outputs.version }}-macosarm64.cyp` | macOS ARM64 |
-            | `chrome-${{ steps.version.outputs.version }}-macosintel.cyp` | macOS x64 |
-            | `chrome-${{ steps.version.outputs.version }}-linux64.cyp` | Linux x64 |
-            | `chrome-${{ steps.version.outputs.version }}-win64.cyp` | Windows x64 |
+            | `chrome-${{ steps.version.outputs.semver_version }}-macosarm64.cyp` | macOS ARM64 |
+            | `chrome-${{ steps.version.outputs.semver_version }}-macosintel.cyp` | macOS x64 |
+            | `chrome-${{ steps.version.outputs.semver_version }}-linux64.cyp` | Linux x64 |
+            | `chrome-${{ steps.version.outputs.semver_version }}-win64.cyp` | Windows x64 |
           files: |
             dist/*.cyp
         env:
