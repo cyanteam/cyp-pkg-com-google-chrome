@@ -1,6 +1,6 @@
 name = "chrome"
 name_cn = "Chrome 浏览器"
-version = "0.0.0"  # 由 GitHub Action 自动更新
+version = "151.0.7922"  # 由 GitHub Action 自动更新
 package_id = "com.google.chrome"
 language = "native"
 architecture = "multi"
