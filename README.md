@@ -1,31 +1,22 @@
-# Chrome browser cyp package
+# cyp-pkg-com-google-chrome
 
-This repository automatically builds cyp packages for Google Chrome across all platforms.
+Google Chrome 浏览器的 cyp 包仓库。
 
-## Platforms
+## 触发构建
 
-| Platform | Architecture | File |
-|----------|-------------|------|
-| macOS ARM | arm64 | `chrome-{version}-macosarm64.cyp` |
-| macOS Intel | x64 | `chrome-{version}-macosintel.cyp` |
-| Linux | x64 | `chrome-{version}-linux64.cyp` |
-| Windows | x64 | `chrome-{version}-win64.cyp` |
+在 GitHub Actions 页面手动触发 `Build Chrome Package`，输入版本号如 `138.0.7204.100`。
 
-## Install
+## 输出
+
+每个架构生成独立的 `.cyp` 文件，发布到 GitHub Release：
+
+- `chrome-{version}-macosarm64.cyp`
+- `chrome-{version}-macosintel.cyp`
+- `chrome-{version}-linux64.cyp`
+- `chrome-{version}-win64.cyp`
+
+## 安装
 
 ```bash
-cyp install chrome
+cyp install com.google.chrome
 ```
-
-## Auto Update
-
-This package is automatically updated daily by GitHub Actions. When a new Chrome stable version is released, the Action will:
-
-1. Detect the new version
-2. Download Chrome for all platforms
-3. Build `.cyp` packages
-4. Create a GitHub Release with all platform packages
-
-## Manual Trigger
-
-Go to Actions → Update Chrome → Run workflow
